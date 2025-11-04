@@ -1,15 +1,18 @@
 package asterisk
 
 import (
+	"fmt"
 	"net/http"
 	"testing"
 
 	apiruleasserts "github.com/kyma-project/api-gateway/tests/e2e/pkg/asserts/apirule"
 	istioasserts "github.com/kyma-project/api-gateway/tests/e2e/pkg/asserts/istio"
+	h "github.com/kyma-project/api-gateway/tests/e2e/pkg/helpers/http"
 	"sigs.k8s.io/e2e-framework/klient/decoder"
 
 	_ "embed"
 
+	"github.com/kyma-project/api-gateway/tests/e2e/pkg/helpers/domain"
 	infrahelpers "github.com/kyma-project/api-gateway/tests/e2e/pkg/helpers/infrastructure"
 	modulehelpers "github.com/kyma-project/api-gateway/tests/e2e/pkg/helpers/modules"
 	"github.com/kyma-project/api-gateway/tests/e2e/pkg/helpers/testsetup"
@@ -22,11 +25,11 @@ var APIRuleAsteriskPath string
 func TestAPIRuleAsterisk(t *testing.T) {
 	require.NoError(t, modulehelpers.CreateIstioOperatorCR(t))
 	require.NoError(t, modulehelpers.CreateApiGatewayCR(t))
-	// kymaGatewayDomain, err := domain.GetFromGateway(t, "kyma-gateway", "kyma-system")
-	// require.NoError(t, err, "Failed to get domain from kyma-gateway")
+	kymaGatewayDomain, err := domain.GetFromGateway(t, "kyma-gateway", "kyma-system")
+	require.NoError(t, err, "Failed to get domain from kyma-gateway")
 
 	t.Run("APIRule exposing service using asterisk in paths", func(t *testing.T) {
-		testBackground, err := testsetup.SetupRandomNamespaceWithOauth2MockAndHttpbin(t, testsetup.WithPrefix("jwt-test"))
+		testBackground, err := testsetup.SetupRandomNamespaceWithOauth2MockAndHttpbin(t, testsetup.WithPrefix("asterisk"))
 		require.NoError(t, err, "Failed to setup test background with httpbin")
 
 		createdApirule, err := infrahelpers.CreateResourceWithTemplateValues(
@@ -69,7 +72,18 @@ func TestAPIRuleAsterisk(t *testing.T) {
 		}
 
 		for _, request := range requests {
-			println(request.endpoint, request.method, request.expectedStatusCode)
+			whereToQuery := fmt.Sprintf("https://%s.%s%s", testBackground.TestName, kymaGatewayDomain, request.endpoint)
+			req, err := http.NewRequest(request.method, whereToQuery, nil)
+			if err != nil {
+				t.Fatalf("err %s", err.Error())
+			}
+			c := h.NewHTTPClient(t)
+			resp, err := c.Do(req)
+			if err != nil {
+				println(err.Error())
+				t.Fatalf("err %s", err.Error())
+			}
+			require.Equal(t, resp.StatusCode, request.expectedStatusCode)
 		}
 	})
 }
