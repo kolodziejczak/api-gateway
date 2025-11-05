@@ -36,6 +36,18 @@ func HasStatusDescription(t *testing.T, name, namespace string, statusDesc strin
 	return apiRule.Status.Description == statusDesc
 }
 
+func HasAnnotation(t *testing.T, name, namespace string, key, value string) bool {
+	t.Helper()
+
+	r, err := client.ResourcesClient(t)
+	require.NoError(t, err)
+
+	var apiRule v2.APIRule
+	require.NoError(t, r.Get(t.Context(), name, namespace, &apiRule))
+
+	return apiRule.Annotations[key] == value
+}
+
 func WaitUntilReady(t *testing.T, name, namespace string) {
 	t.Helper()
 

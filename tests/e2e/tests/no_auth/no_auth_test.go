@@ -1,4 +1,4 @@
-package expose_methods_on_paths
+package no_auth
 
 import (
 	_ "embed"
@@ -17,25 +17,25 @@ import (
 	"sigs.k8s.io/e2e-framework/klient/decoder"
 )
 
-//go:embed paths_and_methods_noauth.yaml
-var APIRuleNoAuth string
+//go:embed no_auth_wildcard.yaml
+var APIRuleNoAuthWildcard string
 
-//go:embed paths_and_methods_jwt.yaml
-var APIRuleJwt string
+//go:embed no_auth_wildcard_updated.yaml
+var APIRuleNoAuthWildcardUpdated string
 
-func TestAPIRuleRequestHeadersAndCookies(t *testing.T) {
+func TestAPIRuleValidation(t *testing.T) {
 	require.NoError(t, modulehelpers.CreateIstioOperatorCR(t))
 	require.NoError(t, modulehelpers.CreateApiGatewayCR(t))
-	kymaGatewayDomain, err := domain.GetFromGateway(t, "kyma-gateway", "kyma-system")
-	require.NoError(t, err, "Failed to get domain from kyma-gateway")
 
-	t.Run("Expose GET, POST method for /anything and only PUT for /anything/put with noAuth", func(t *testing.T) {
-		testBackground, err := testsetup.SetupRandomNamespaceWithOauth2MockAndHttpbin(t, testsetup.WithPrefix("methods-on-paths"))
+	t.Run("Calling an endpoint unsecured on all paths from outside of the cluster", func(t *testing.T) {
+		testBackground, err := testsetup.SetupRandomNamespaceWithOauth2MockAndHttpbin(t, testsetup.WithPrefix("no-auth"))
 		require.NoError(t, err, "Failed to setup test background with httpbin")
+		kymaGatewayDomain, err := domain.GetFromGateway(t, "kyma-gateway", "kyma-system")
+		require.NoError(t, err, "Failed to get domain from kyma-gateway")
 
 		createdApirule, err := infrahelpers.CreateResourceWithTemplateValues(
 			t,
-			APIRuleNoAuth,
+			APIRuleNoAuthWildcard,
 			// got to fulfill these properly
 			map[string]any{
 				"Name":        testBackground.TestName,
@@ -51,17 +51,16 @@ func TestAPIRuleRequestHeadersAndCookies(t *testing.T) {
 
 		apiruleasserts.WaitUntilReady(t, testBackground.TestName, testBackground.Namespace)
 		istioasserts.VirtualServiceOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace)
+		istioasserts.AuthorizationPolicyOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace, 2)
 
 		requests := []struct {
 			path                   string
 			method                 string
 			expectedResponseStatus int
 		}{
-			{path: "/anything", method: http.MethodGet, expectedResponseStatus: http.StatusOK},
-			{path: "/anything", method: http.MethodPost, expectedResponseStatus: http.StatusOK},
-			{path: "/anything", method: http.MethodPut, expectedResponseStatus: http.StatusNotFound},
-			{path: "/anything/put", method: http.MethodPut, expectedResponseStatus: http.StatusOK},
-			{path: "/anything/put", method: http.MethodPost, expectedResponseStatus: http.StatusNotFound},
+			{path: "/ip", method: http.MethodGet, expectedResponseStatus: http.StatusOK},
+			{path: "/status/200", method: http.MethodGet, expectedResponseStatus: http.StatusOK},
+			{path: "/headers", method: http.MethodGet, expectedResponseStatus: http.StatusOK},
 		}
 
 		for _, r := range requests {
@@ -79,13 +78,13 @@ func TestAPIRuleRequestHeadersAndCookies(t *testing.T) {
 		}
 	})
 
-	t.Run("Expose GET, POST method for /anything and PUT for /anything/put secured by JWT", func(t *testing.T) {
-		testBackground, err := testsetup.SetupRandomNamespaceWithOauth2MockAndHttpbin(t, testsetup.WithPrefix("methods-on-paths"))
+	t.Run("Calling an endpoint unsecured on all paths from inside of the cluster", func(t *testing.T) {
+		testBackground, err := testsetup.SetupRandomNamespaceWithOauth2MockAndHttpbin(t, testsetup.WithPrefix("no-auth"))
 		require.NoError(t, err, "Failed to setup test background with httpbin")
 
 		createdApirule, err := infrahelpers.CreateResourceWithTemplateValues(
 			t,
-			APIRuleJwt,
+			APIRuleNoAuthWildcard,
 			// got to fulfill these properly
 			map[string]any{
 				"Name":        testBackground.TestName,
@@ -101,17 +100,60 @@ func TestAPIRuleRequestHeadersAndCookies(t *testing.T) {
 
 		apiruleasserts.WaitUntilReady(t, testBackground.TestName, testBackground.Namespace)
 		istioasserts.VirtualServiceOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace)
+		istioasserts.AuthorizationPolicyOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace, 2)
 
 		requests := []struct {
 			path                   string
 			method                 string
 			expectedResponseStatus int
 		}{
-			{path: "/anything", method: http.MethodGet, expectedResponseStatus: http.StatusOK},
-			{path: "/anything", method: http.MethodPost, expectedResponseStatus: http.StatusOK},
-			{path: "/anything", method: http.MethodPut, expectedResponseStatus: http.StatusNotFound},
-			{path: "/anything/put", method: http.MethodPut, expectedResponseStatus: http.StatusOK},
-			{path: "/anything/put", method: http.MethodPost, expectedResponseStatus: http.StatusNotFound},
+			{path: "/status/200", method: http.MethodGet, expectedResponseStatus: http.StatusOK},
+			{path: "/headers", method: http.MethodGet, expectedResponseStatus: http.StatusOK},
+		}
+
+		for _, r := range requests {
+			println(r.path)
+		}
+	})
+
+	t.Run("Calling an endpoint unsecured on all paths from outside of the cluster", func(t *testing.T) {
+		testBackground, err := testsetup.SetupRandomNamespaceWithOauth2MockAndHttpbin(t, testsetup.WithPrefix("no-auth"))
+		require.NoError(t, err, "Failed to setup test background with httpbin")
+		kymaGatewayDomain, err := domain.GetFromGateway(t, "kyma-gateway", "kyma-system")
+		require.NoError(t, err, "Failed to get domain from kyma-gateway")
+
+		createdApirule, err := infrahelpers.CreateResourceWithTemplateValues(
+			t,
+			APIRuleNoAuthWildcard,
+			// got to fulfill these properly
+			map[string]any{
+				"Name":        testBackground.TestName,
+				"Host":        testBackground.TestName,
+				"ServiceName": testBackground.TargetServiceName,
+				"ServicePort": testBackground.TargetServicePort,
+				"Gateway":     "kyma-system/kyma-gateway",
+			},
+			decoder.MutateNamespace(testBackground.Namespace),
+		)
+		require.NoError(t, err, "Failed to create APIRule resource")
+		require.NotEmpty(t, createdApirule, "Created APIRule resource should not be empty")
+
+		apiruleasserts.WaitUntilReady(t, testBackground.TestName, testBackground.Namespace)
+		apiruleasserts.HasAnnotation(t, testBackground.TestName, testBackground.Namespace, "gateway.kyma-project.io/original-version", "v2")
+
+		infrahelpers.CreateResourceWithTemplateValues()
+
+		istioasserts.VirtualServiceOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace)
+		istioasserts.AuthorizationPolicyOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace, 2)
+
+		requests := []struct {
+			path                   string
+			method                 string
+			expectedResponseStatus int
+		}{
+			{path: "/ip", method: http.MethodGet, expectedResponseStatus: http.StatusOK},
+			{path: "/status/200", method: http.MethodGet, expectedResponseStatus: http.StatusOK},
+			{path: "/headers", method: http.MethodGet, expectedResponseStatus: http.StatusOK},
 		}
 
 		for _, r := range requests {
