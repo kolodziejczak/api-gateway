@@ -1,6 +1,8 @@
 package apirule
 
 import (
+	"testing"
+
 	v2 "github.com/kyma-project/api-gateway/apis/gateway/v2"
 	"github.com/kyma-project/api-gateway/tests/e2e/pkg/helpers/client"
 	"github.com/stretchr/testify/assert"
@@ -8,7 +10,6 @@ import (
 	"sigs.k8s.io/e2e-framework/klient/k8s"
 	"sigs.k8s.io/e2e-framework/klient/wait"
 	"sigs.k8s.io/e2e-framework/klient/wait/conditions"
-	"testing"
 )
 
 func HasState(t *testing.T, name, namespace string, state v2.State) bool {
@@ -21,6 +22,18 @@ func HasState(t *testing.T, name, namespace string, state v2.State) bool {
 	require.NoError(t, r.Get(t.Context(), name, namespace, &apiRule))
 
 	return apiRule.Status.State == state
+}
+
+func HasStatusDescription(t *testing.T, name, namespace string, statusDesc string) bool {
+	t.Helper()
+
+	r, err := client.ResourcesClient(t)
+	require.NoError(t, err)
+
+	var apiRule v2.APIRule
+	require.NoError(t, r.Get(t.Context(), name, namespace, &apiRule))
+
+	return apiRule.Status.Description == statusDesc
 }
 
 func WaitUntilReady(t *testing.T, name, namespace string) {

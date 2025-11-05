@@ -72,15 +72,14 @@ func TestAPIRuleAsterisk(t *testing.T) {
 		}
 
 		for _, request := range requests {
-			whereToQuery := fmt.Sprintf("https://%s.%s%s", testBackground.TestName, kymaGatewayDomain, request.endpoint)
-			req, err := http.NewRequest(request.method, whereToQuery, nil)
+			url := fmt.Sprintf("https://%s.%s%s", testBackground.TestName, kymaGatewayDomain, request.endpoint)
+			req, err := http.NewRequest(request.method, url, nil)
 			if err != nil {
 				t.Fatalf("err %s", err.Error())
 			}
 			c := h.NewHTTPClient(t)
 			resp, err := c.Do(req)
 			if err != nil {
-				println(err.Error())
 				t.Fatalf("err %s", err.Error())
 			}
 			require.Equal(t, resp.StatusCode, request.expectedStatusCode)
