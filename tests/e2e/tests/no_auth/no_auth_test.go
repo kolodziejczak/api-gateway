@@ -140,9 +140,26 @@ func TestAPIRuleValidation(t *testing.T) {
 
 		apiruleasserts.WaitUntilReady(t, testBackground.TestName, testBackground.Namespace)
 		apiruleasserts.HasAnnotation(t, testBackground.TestName, testBackground.Namespace, "gateway.kyma-project.io/original-version", "v2")
+		istioasserts.VirtualServiceOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace)
+		istioasserts.AuthorizationPolicyOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace, 2)
 
-		infrahelpers.CreateResourceWithTemplateValues()
+		updatedApirule, err := infrahelpers.UpdateResourceWithTemplateValues(
+			t,
+			APIRuleNoAuthWildcard,
+			// got to fulfill these properly
+			map[string]any{
+				"Name":        testBackground.TestName,
+				"Host":        testBackground.TestName,
+				"ServiceName": testBackground.TargetServiceName,
+				"ServicePort": testBackground.TargetServicePort,
+				"Gateway":     "kyma-system/kyma-gateway",
+			})
 
+		require.NoError(t, err, "Failed to create APIRule resource")
+		require.NotEmpty(t, updatedApirule, "Created APIRule resource should not be empty")
+
+		apiruleasserts.WaitUntilReady(t, testBackground.TestName, testBackground.Namespace)
+		apiruleasserts.HasAnnotation(t, testBackground.TestName, testBackground.Namespace, "gateway.kyma-project.io/original-version", "v2")
 		istioasserts.VirtualServiceOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace)
 		istioasserts.AuthorizationPolicyOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace, 2)
 
