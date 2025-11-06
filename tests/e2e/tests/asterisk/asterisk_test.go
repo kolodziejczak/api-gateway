@@ -29,7 +29,7 @@ func TestAPIRuleAsterisk(t *testing.T) {
 	require.NoError(t, err, "Failed to get domain from kyma-gateway")
 
 	t.Run("APIRule exposing service using asterisk in paths", func(t *testing.T) {
-		testBackground, err := testsetup.SetupRandomNamespaceWithOauth2MockAndHttpbin(t, testsetup.WithPrefix("asterisk"))
+		testBackground, err := testsetup.SetupRandomNamespaceWithHttpbin(t, testsetup.WithPrefix("asterisk"))
 		require.NoError(t, err, "Failed to setup test background with httpbin")
 
 		createdApirule, err := infrahelpers.CreateResourceWithTemplateValues(
