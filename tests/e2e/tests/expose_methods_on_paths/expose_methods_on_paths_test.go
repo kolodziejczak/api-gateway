@@ -30,7 +30,8 @@ func TestAPIRuleRequestHeadersAndCookies(t *testing.T) {
 	require.NoError(t, err, "Failed to get domain from kyma-gateway")
 
 	t.Run("Expose GET, POST method for /anything and only PUT for /anything/put with noAuth", func(t *testing.T) {
-		testBackground, err := testsetup.SetupRandomNamespaceWithOauth2MockAndHttpbin(t, testsetup.WithPrefix("methods-on-paths"))
+		t.Parallel()
+		testBackground, err := testsetup.SetupRandomNamespaceWithHttpbin(t, testsetup.WithPrefix("methods-on-paths"))
 		require.NoError(t, err, "Failed to setup test background with httpbin")
 
 		createdApirule, err := infrahelpers.CreateResourceWithTemplateValues(
