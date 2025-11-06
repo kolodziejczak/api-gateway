@@ -75,7 +75,7 @@ func TestAPIRuleAsterisk(t *testing.T) {
 
 		for _, request := range requests {
 			url := fmt.Sprintf("https://%s.%s%s", testBackground.TestName, kymaGatewayDomain, request.endpoint)
-			err := endpoint.AssertEndpoint(t, request.method, url, nil, request.expectedStatusCode, nil)
+			err := endpoint.AssertEndpoint(t, request.method, url, request.expectedStatusCode)
 			if err != nil {
 				t.Fatalf("err %s", err.Error())
 			}

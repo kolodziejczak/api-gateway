@@ -1,15 +1,14 @@
 apiVersion: gateway.kyma-project.io/v2
 kind: APIRule
 metadata:
-  name: "{{.NamePrefix}}-{{.TestID}}"
-  namespace: "{{.Namespace}}"
+  name: "{{ .Name }}"
 spec:
-  gateway: "{{.GatewayNamespace}}/{{.GatewayName}}"
+  gateway: "{{ .Gateway }}"
   hosts:
-    - "httpbin-{{.TestID}}.{{.Domain}}"
+    - "{{ .Host }}"
   service:
-    name: httpbin-{{.TestID}}
-    port: 8000
+    name: "{{ .ServiceName }}"
+    port: {{ .ServicePort }}
   rules:
     - path: "/*"
       methods: ["OPTIONS"]
