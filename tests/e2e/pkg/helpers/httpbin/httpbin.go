@@ -3,14 +3,19 @@ package httpbin
 import (
 	"bytes"
 	_ "embed"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"testing"
+
 	"github.com/kyma-project/api-gateway/tests/e2e/pkg/helpers/client"
 	"github.com/kyma-project/api-gateway/tests/e2e/pkg/setup"
+	"github.com/pkg/errors"
 	"sigs.k8s.io/e2e-framework/klient/decoder"
 	"sigs.k8s.io/e2e-framework/klient/k8s/resources"
 	"sigs.k8s.io/e2e-framework/klient/wait"
 	"sigs.k8s.io/e2e-framework/klient/wait/conditions"
-	"testing"
 )
 
 //go:embed manifest.yaml
@@ -56,4 +61,20 @@ func start(t *testing.T, r *resources.Resources, namespace string) error {
 	})
 
 	return wait.For(conditions.New(r).DeploymentAvailable("httpbin", namespace))
+}
+
+type HttpBinBodyWithHeaders map[string][]string
+
+func GetHttpbinBodyWithHeadersFromResponse(response *http.Response) (*HttpBinBodyWithHeaders, error) {
+	responseBody, err := io.ReadAll(response.Body)
+	if err != nil {
+		return nil, errors.Errorf("failed to read response body: %s", err.Error())
+	}
+
+	httpbinBodyWIthHeaders := map[string]interface{}{}
+	err = json.Unmarshal(responseBody, &httpbinBodyWIthHeaders)
+	if err != nil {
+		return nil, errors.Errorf("failed to unmarshal response body: %s", err.Error())
+	}
+	return httpbinBodyWIthHeaders["headers"].(*HttpBinBodyWithHeaders), nil
 }
