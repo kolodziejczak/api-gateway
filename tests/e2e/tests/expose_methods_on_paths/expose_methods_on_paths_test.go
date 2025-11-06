@@ -24,7 +24,7 @@ var APIRuleNoAuth string
 //go:embed paths_and_methods_jwt.yaml
 var APIRuleJwt string
 
-func TestAPIRuleRequestHeadersAndCookies(t *testing.T) {
+func TestAPIRuleMethodsOnPaths(t *testing.T) {
 	require.NoError(t, modulehelpers.CreateIstioOperatorCR(t))
 	require.NoError(t, modulehelpers.CreateApiGatewayCR(t))
 	kymaGatewayDomain, err := domain.GetFromGateway(t, "kyma-gateway", "kyma-system")

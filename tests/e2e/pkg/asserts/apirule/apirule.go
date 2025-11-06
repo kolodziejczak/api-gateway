@@ -69,3 +69,25 @@ func WaitUntilReady(t *testing.T, name, namespace string) {
 		t.Logf("APIRule %s/%s status: %+v", namespace, name, apiRule.Status)
 	}
 }
+
+func WaitUntilError(t *testing.T, name, namespace string) {
+	t.Helper()
+
+	r, err := client.ResourcesClient(t)
+	require.NoError(t, err)
+
+	var apiRule v2.APIRule
+	require.NoError(t, r.Get(t.Context(), name, namespace, &apiRule))
+
+	err = wait.For(conditions.New(r).ResourceMatch(&apiRule, func(obj k8s.Object) bool {
+		ar, ok := obj.(*v2.APIRule)
+		if !ok {
+			t.Fatalf("Expected object of type v2.APIRule, got %T", obj)
+		}
+		return ar.Status.State == v2.Error
+	}))
+	assert.NoError(t, err)
+	if err != nil {
+		t.Logf("APIRule %s/%s status: %+v", namespace, name, apiRule.Status)
+	}
+}
