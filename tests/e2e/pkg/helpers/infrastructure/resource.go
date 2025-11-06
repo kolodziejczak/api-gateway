@@ -121,19 +121,23 @@ func updateResource(t *testing.T, resource k8s.Object) (k8s.Object, error) {
 		resource.GetObjectKind().GroupVersionKind().Version,
 		resource.GetName(),
 		resource.GetNamespace())
+	existingResource := resource.DeepCopyObject().(k8s.Object)
+	err = r.Get(t.Context(), resource.GetName(), resource.GetNamespace(), existingResource)
+	if err != nil {
+		t.Logf("Failed to get resource %s: %v", resource.GetName(), err)
+		return nil, err
+	}
 
-	setup.DeclareCleanup(t, func() {
-		t.Logf("Cleaning up %s/%s: name=\"%s\" namespace=\"%s\"",
-			resource.GetObjectKind().GroupVersionKind().Kind,
-			resource.GetObjectKind().GroupVersionKind().Version,
-			resource.GetName(),
-			resource.GetNamespace())
-		err := r.Delete(setup.GetCleanupContext(), resource)
-		if err != nil {
-			t.Logf("Failed to delete resource %s: %v", resource.GetName(), err)
-			return
-		}
-	})
+	resource.SetResourceVersion(existingResource.GetResourceVersion())
+	resource.SetUID(existingResource.GetUID())
+	resource.SetCreationTimestamp(existingResource.GetCreationTimestamp())
+
+	t.Logf("Updating %s/%s: name=\"%s\" namespace=\"%s\"",
+		resource.GetObjectKind().GroupVersionKind().Kind,
+		resource.GetObjectKind().GroupVersionKind().Version,
+		resource.GetName(),
+		resource.GetNamespace(),
+	)
 
 	return resource, r.Update(t.Context(), resource)
 }

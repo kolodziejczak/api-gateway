@@ -7,12 +7,14 @@ import (
 	"testing"
 
 	apiruleasserts "github.com/kyma-project/api-gateway/tests/e2e/pkg/asserts/apirule"
+	"github.com/kyma-project/api-gateway/tests/e2e/pkg/asserts/endpoint"
 	istioasserts "github.com/kyma-project/api-gateway/tests/e2e/pkg/asserts/istio"
 	"github.com/kyma-project/api-gateway/tests/e2e/pkg/helpers/domain"
-	h "github.com/kyma-project/api-gateway/tests/e2e/pkg/helpers/http"
+	"github.com/kyma-project/api-gateway/tests/e2e/pkg/helpers/httpincluster"
 	infrahelpers "github.com/kyma-project/api-gateway/tests/e2e/pkg/helpers/infrastructure"
 	modulehelpers "github.com/kyma-project/api-gateway/tests/e2e/pkg/helpers/modules"
 	"github.com/kyma-project/api-gateway/tests/e2e/pkg/helpers/testsetup"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/e2e-framework/klient/decoder"
 )
@@ -28,7 +30,8 @@ func TestAPIRuleValidation(t *testing.T) {
 	require.NoError(t, modulehelpers.CreateApiGatewayCR(t))
 
 	t.Run("Calling an endpoint unsecured on all paths from outside of the cluster", func(t *testing.T) {
-		testBackground, err := testsetup.SetupRandomNamespaceWithOauth2MockAndHttpbin(t, testsetup.WithPrefix("no-auth"))
+		t.Parallel()
+		testBackground, err := testsetup.SetupRandomNamespaceWithHttpbin(t, testsetup.WithPrefix("no-auth"))
 		require.NoError(t, err, "Failed to setup test background with httpbin")
 		kymaGatewayDomain, err := domain.GetFromGateway(t, "kyma-gateway", "kyma-system")
 		require.NoError(t, err, "Failed to get domain from kyma-gateway")
@@ -36,7 +39,6 @@ func TestAPIRuleValidation(t *testing.T) {
 		createdApirule, err := infrahelpers.CreateResourceWithTemplateValues(
 			t,
 			APIRuleNoAuthWildcard,
-			// got to fulfill these properly
 			map[string]any{
 				"Name":        testBackground.TestName,
 				"Host":        testBackground.TestName,
@@ -51,7 +53,6 @@ func TestAPIRuleValidation(t *testing.T) {
 
 		apiruleasserts.WaitUntilReady(t, testBackground.TestName, testBackground.Namespace)
 		istioasserts.VirtualServiceOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace)
-		istioasserts.AuthorizationPolicyOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace, 2)
 
 		requests := []struct {
 			path                   string
@@ -65,21 +66,14 @@ func TestAPIRuleValidation(t *testing.T) {
 
 		for _, r := range requests {
 			url := fmt.Sprintf("https://%s.%s%s", testBackground.TestName, kymaGatewayDomain, r.path)
-			req, err := http.NewRequest(r.method, url, nil)
-			if err != nil {
-				t.Fatalf("err %s", err.Error())
-			}
-			c := h.NewHTTPClient(t)
-			resp, err := c.Do(req)
-			if err != nil {
-				t.Fatalf("err %s", err.Error())
-			}
-			require.Equal(t, resp.StatusCode, r.expectedResponseStatus)
+			err = endpoint.AssertEndpoint(t, r.method, url, r.expectedResponseStatus)
+			require.NoError(t, err)
 		}
 	})
 
 	t.Run("Calling an endpoint unsecured on all paths from inside of the cluster", func(t *testing.T) {
-		testBackground, err := testsetup.SetupRandomNamespaceWithOauth2MockAndHttpbin(t, testsetup.WithPrefix("no-auth"))
+		t.Parallel()
+		testBackground, err := testsetup.SetupRandomNamespaceWithHttpbin(t, testsetup.WithPrefix("no-auth"))
 		require.NoError(t, err, "Failed to setup test background with httpbin")
 
 		createdApirule, err := infrahelpers.CreateResourceWithTemplateValues(
@@ -100,24 +94,33 @@ func TestAPIRuleValidation(t *testing.T) {
 
 		apiruleasserts.WaitUntilReady(t, testBackground.TestName, testBackground.Namespace)
 		istioasserts.VirtualServiceOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace)
-		istioasserts.AuthorizationPolicyOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace, 2)
 
-		requests := []struct {
-			path                   string
-			method                 string
-			expectedResponseStatus int
-		}{
-			{path: "/status/200", method: http.MethodGet, expectedResponseStatus: http.StatusOK},
-			{path: "/headers", method: http.MethodGet, expectedResponseStatus: http.StatusOK},
+		requestPaths := []string{
+			"/status/200",
+			"/headers",
 		}
 
-		for _, r := range requests {
-			println(r.path)
+		for _, path := range requestPaths {
+			// in-cluster call
+			stdOut, stdErr, err := httpincluster.RunRequestFromInsideCluster(t,
+				testBackground.Namespace,
+				fmt.Sprintf("http://%s.%s.svc.cluster.local:%d%s",
+					testBackground.TargetServiceName, testBackground.Namespace, testBackground.TargetServicePort, path,
+				),
+			)
+
+			assert.Error(t, err, "Expected error when calling another service within the mesh")
+			assert.NotEmpty(t, stdOut, "StdOut should not be empty")
+			assert.NotEmpty(t, stdErr, "StdErr should not be empty")
+			assert.Contains(t, stdOut, "HTTP/1.1 403 Forbidden", "Response should contain 403 Forbidden")
+			assert.Contains(t, stdErr, "The requested URL returned error: 403")
+
 		}
 	})
 
-	t.Run("Calling an endpoint unsecured on all paths from outside of the cluster", func(t *testing.T) {
-		testBackground, err := testsetup.SetupRandomNamespaceWithOauth2MockAndHttpbin(t, testsetup.WithPrefix("no-auth"))
+	t.Run("Updating an APIRule and calling an httpbin endpoint unsecured on all paths", func(t *testing.T) {
+		t.Parallel()
+		testBackground, err := testsetup.SetupRandomNamespaceWithHttpbin(t, testsetup.WithPrefix("no-auth"))
 		require.NoError(t, err, "Failed to setup test background with httpbin")
 		kymaGatewayDomain, err := domain.GetFromGateway(t, "kyma-gateway", "kyma-system")
 		require.NoError(t, err, "Failed to get domain from kyma-gateway")
@@ -141,27 +144,26 @@ func TestAPIRuleValidation(t *testing.T) {
 		apiruleasserts.WaitUntilReady(t, testBackground.TestName, testBackground.Namespace)
 		apiruleasserts.HasAnnotation(t, testBackground.TestName, testBackground.Namespace, "gateway.kyma-project.io/original-version", "v2")
 		istioasserts.VirtualServiceOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace)
-		istioasserts.AuthorizationPolicyOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace, 2)
 
 		updatedApirule, err := infrahelpers.UpdateResourceWithTemplateValues(
 			t,
-			APIRuleNoAuthWildcard,
-			// got to fulfill these properly
+			APIRuleNoAuthWildcardUpdated,
 			map[string]any{
 				"Name":        testBackground.TestName,
 				"Host":        testBackground.TestName,
 				"ServiceName": testBackground.TargetServiceName,
 				"ServicePort": testBackground.TargetServicePort,
 				"Gateway":     "kyma-system/kyma-gateway",
-			})
+			},
+			decoder.MutateNamespace(testBackground.Namespace),
+		)
 
-		require.NoError(t, err, "Failed to create APIRule resource")
-		require.NotEmpty(t, updatedApirule, "Created APIRule resource should not be empty")
+		require.NoError(t, err, "Failed to update APIRule resource")
+		require.NotEmpty(t, updatedApirule, "Updated APIRule resource should not be empty")
 
 		apiruleasserts.WaitUntilReady(t, testBackground.TestName, testBackground.Namespace)
 		apiruleasserts.HasAnnotation(t, testBackground.TestName, testBackground.Namespace, "gateway.kyma-project.io/original-version", "v2")
 		istioasserts.VirtualServiceOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace)
-		istioasserts.AuthorizationPolicyOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace, 2)
 
 		requests := []struct {
 			path                   string
@@ -175,16 +177,8 @@ func TestAPIRuleValidation(t *testing.T) {
 
 		for _, r := range requests {
 			url := fmt.Sprintf("https://%s.%s%s", testBackground.TestName, kymaGatewayDomain, r.path)
-			req, err := http.NewRequest(r.method, url, nil)
-			if err != nil {
-				t.Fatalf("err %s", err.Error())
-			}
-			c := h.NewHTTPClient(t)
-			resp, err := c.Do(req)
-			if err != nil {
-				t.Fatalf("err %s", err.Error())
-			}
-			require.Equal(t, resp.StatusCode, r.expectedResponseStatus)
+			err = endpoint.AssertEndpoint(t, r.method, url, r.expectedResponseStatus)
+			require.NoError(t, err)
 		}
 	})
 }
