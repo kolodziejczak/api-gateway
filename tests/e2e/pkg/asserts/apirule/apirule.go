@@ -1,6 +1,7 @@
 package apirule
 
 import (
+	"strings"
 	"testing"
 
 	v2 "github.com/kyma-project/api-gateway/apis/gateway/v2"
@@ -34,6 +35,16 @@ func HasStatusDescription(t *testing.T, name, namespace string, statusDesc strin
 	require.NoError(t, r.Get(t.Context(), name, namespace, &apiRule))
 
 	return apiRule.Status.Description == statusDesc
+}
+func ContainsInStatusDescription(t *testing.T, name, namespace string, substringStatusDesc string) bool {
+	t.Helper()
+
+	r, err := client.ResourcesClient(t)
+	require.NoError(t, err)
+
+	var apiRule v2.APIRule
+	require.NoError(t, r.Get(t.Context(), name, namespace, &apiRule))
+	return strings.Contains(apiRule.Status.Description, substringStatusDesc)
 }
 
 func HasAnnotation(t *testing.T, name, namespace string, key, value string) bool {
