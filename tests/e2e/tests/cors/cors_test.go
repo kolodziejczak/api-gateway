@@ -29,44 +29,46 @@ func TestAPIRuleCors(t *testing.T) {
 	kymaGatewayDomain, err := domain.GetFromGateway(t, "kyma-gateway", "kyma-system")
 	require.NoError(t, err, "Failed to get domain from kyma-gateway")
 
-	//t.Run("No CORS headers are returned when CORS is not specified in the APIRule", func(t *testing.T) {
-	//	testBackground, err := testsetup.SetupRandomNamespaceWithHttpbin(t, testsetup.WithPrefix("asterisk"))
-	//	require.NoError(t, err, "Failed to setup test background with httpbin")
-	//
-	//	createdApirule, err := infrahelpers.CreateResourceWithTemplateValues(
-	//		t,
-	//		APIRuleCorsDefault,
-	//		map[string]any{
-	//			"Name":        testBackground.TestName,
-	//			"Host":        testBackground.TestName,
-	//			"ServiceName": testBackground.TargetServiceName,
-	//			"ServicePort": testBackground.TargetServicePort,
-	//			"Gateway":     "kyma-system/kyma-gateway",
-	//		},
-	//		decoder.MutateNamespace(testBackground.Namespace),
-	//	)
-	//	require.NoError(t, err, "Failed to create APIRule resource")
-	//	require.NotEmpty(t, createdApirule, "Created APIRule resource should not be empty")
-	//
-	//	apiruleasserts.WaitUntilReady(t, testBackground.TestName, testBackground.Namespace)
-	//	istioasserts.VirtualServiceOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace)
-	//	istioasserts.AuthorizationPolicyOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace, 1)
-	//
-	//	url := fmt.Sprintf("https://%s.%s%s", testBackground.TestName, kymaGatewayDomain, "/ip")
-	//	absentHeaders := []string{
-	//		"Access-Control-Allow-Origin",
-	//		"Access-Control-Allow-Methods",
-	//		"Access-Control-Allow-Headers",
-	//		"Access-Control-Expose-Headers",
-	//		"Access-Control-Allow-Credentials",
-	//		"Access-Control-Max-Age",
-	//	}
-	//	err = endpoint.AssertEndpointWithoutResponseHeaders(t, http.MethodOptions, url, map[string]string{"Origin": "localhost"}, http.StatusOK, absentHeaders)
-	//	require.NoError(t, err, "Failed to make http request with CORS")
-	//})
+	t.Run("No CORS headers are returned when CORS is not specified in the APIRule", func(t *testing.T) {
+		t.Parallel()
+		testBackground, err := testsetup.SetupRandomNamespaceWithHttpbin(t, testsetup.WithPrefix("cors"))
+		require.NoError(t, err, "Failed to setup test background with httpbin")
+
+		createdApirule, err := infrahelpers.CreateResourceWithTemplateValues(
+			t,
+			APIRuleCorsDefault,
+			map[string]any{
+				"Name":        testBackground.TestName,
+				"Host":        testBackground.TestName,
+				"ServiceName": testBackground.TargetServiceName,
+				"ServicePort": testBackground.TargetServicePort,
+				"Gateway":     "kyma-system/kyma-gateway",
+			},
+			decoder.MutateNamespace(testBackground.Namespace),
+		)
+		require.NoError(t, err, "Failed to create APIRule resource")
+		require.NotEmpty(t, createdApirule, "Created APIRule resource should not be empty")
+
+		apiruleasserts.WaitUntilReady(t, testBackground.TestName, testBackground.Namespace)
+		istioasserts.VirtualServiceOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace)
+		istioasserts.AuthorizationPolicyOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace, 1)
+
+		url := fmt.Sprintf("https://%s.%s%s", testBackground.TestName, kymaGatewayDomain, "/ip")
+		absentHeaders := []string{
+			"Access-Control-Allow-Origin",
+			"Access-Control-Allow-Methods",
+			"Access-Control-Allow-Headers",
+			"Access-Control-Expose-Headers",
+			"Access-Control-Allow-Credentials",
+			"Access-Control-Max-Age",
+		}
+		err = endpoint.AssertEndpointWithoutResponseHeaders(t, http.MethodOptions, url, map[string]string{"Origin": "localhost"}, http.StatusOK, absentHeaders)
+		require.NoError(t, err, "Failed to make http request with CORS")
+	})
 
 	t.Run("CORS headers are returned when CORS is specified in the APIRule", func(t *testing.T) {
-		testBackground, err := testsetup.SetupRandomNamespaceWithOauth2MockAndHttpbin(t, testsetup.WithPrefix("asterisk"))
+		t.Parallel()
+		testBackground, err := testsetup.SetupRandomNamespaceWithHttpbin(t, testsetup.WithPrefix("cors"))
 		require.NoError(t, err, "Failed to setup test background with httpbin")
 
 		createdApirule, err := infrahelpers.CreateResourceWithTemplateValues(
@@ -117,6 +119,30 @@ func TestAPIRuleCors(t *testing.T) {
 				"Access-Control-Max-Age":        "300",
 			}
 			err = endpoint.AssertEndpointWithResponseHeaders(t, http.MethodOptions, url, requestHeaders, http.StatusOK, expectedResponseHeaders)
+			require.NoError(t, err, "Failed to make http request with CORS")
+		}
+
+		notAllowedOriginHeaderValues := []string{
+			"localhost",
+			"a.localhost",
+			"a.b.localhost",
+		}
+
+		for _, originHeaderValue := range notAllowedOriginHeaderValues {
+			url := fmt.Sprintf("https://%s.%s%s", testBackground.TestName, kymaGatewayDomain, "/ip")
+			requestHeaders := map[string]string{
+				"Origin":                        originHeaderValue,
+				"Access-Control-Request-Method": "GET,POST,PUT,DELETE,PATCH",
+			}
+			absentHeaders := []string{
+				"Access-Control-Allow-Origin",
+				"Access-Control-Allow-Methods",
+				"Access-Control-Allow-Headers",
+				"Access-Control-Expose-Headers",
+				"Access-Control-Allow-Credentials",
+				"Access-Control-Max-Age",
+			}
+			err = endpoint.AssertEndpointWithoutResponseHeaders(t, http.MethodOptions, url, requestHeaders, http.StatusOK, absentHeaders)
 			require.NoError(t, err, "Failed to make http request with CORS")
 		}
 	})
