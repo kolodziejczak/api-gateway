@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	apiruleasserts "github.com/kyma-project/api-gateway/tests/e2e/pkg/asserts/apirule"
+	"github.com/kyma-project/api-gateway/tests/e2e/pkg/asserts/endpoint"
 	istioasserts "github.com/kyma-project/api-gateway/tests/e2e/pkg/asserts/istio"
-	h "github.com/kyma-project/api-gateway/tests/e2e/pkg/helpers/http"
 	"sigs.k8s.io/e2e-framework/klient/decoder"
 
 	_ "embed"
@@ -48,7 +48,9 @@ func TestAPIRuleAsterisk(t *testing.T) {
 		require.NotEmpty(t, createdApirule, "Created APIRule resource should not be empty")
 
 		apiruleasserts.WaitUntilReady(t, testBackground.TestName, testBackground.Namespace)
+		apiruleasserts.HasAnnotation(t, testBackground.TestName, testBackground.Namespace, "gateway.kyma-project.io/original-version", "v2")
 		istioasserts.VirtualServiceOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace)
+		istioasserts.AuthorizationPolicyOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace, 8)
 
 		requests := []struct {
 			endpoint           string
@@ -73,16 +75,10 @@ func TestAPIRuleAsterisk(t *testing.T) {
 
 		for _, request := range requests {
 			url := fmt.Sprintf("https://%s.%s%s", testBackground.TestName, kymaGatewayDomain, request.endpoint)
-			req, err := http.NewRequest(request.method, url, nil)
+			err := endpoint.AssertEndpoint(t, request.method, url, nil, request.expectedStatusCode, nil)
 			if err != nil {
 				t.Fatalf("err %s", err.Error())
 			}
-			c := h.NewHTTPClient(t)
-			resp, err := c.Do(req)
-			if err != nil {
-				t.Fatalf("err %s", err.Error())
-			}
-			require.Equal(t, resp.StatusCode, request.expectedStatusCode)
 		}
 	})
 }
