@@ -80,7 +80,6 @@ func TestAPIRuleMethodsOnPaths(t *testing.T) {
 		createdApirule, err := infrahelpers.CreateResourceWithTemplateValues(
 			t,
 			APIRuleJwt,
-			// got to fulfill these properly
 			map[string]any{
 				"Name":        testBackground.TestName,
 				"Host":        testBackground.TestName,

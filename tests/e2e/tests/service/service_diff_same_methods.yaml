@@ -10,17 +10,21 @@ spec:
         name: "{{ .ServiceName }}"
         port: {{ .ServicePort }}
     rules:
-    - path: {{ .HeadersJwtSecuredPath }}
-      methods: {{ .HeadersMethods }}
+    - path: /headers
+      methods:
+      - "GET"
+      - "POST"
       jwt:
         authentications:
           - issuer: "{{ .Issuer }}"
             jwksUri: "{{ .JwksUri }}"
-    - path: {{ .helloJwtSecuredPath }}
+    - path: /ip
       service:
-        name: helloworld-{{.TestID}}
-        port: 5000
-      methods: {{ .helloMethods }}
+          name: "{{ .SecondServiceName }}"
+          port: {{ .SecondServicePort }}
+      methods:
+      - "GET"
+      - "POST"
       jwt:
         authentications:
           - issuer: "{{ .Issuer }}"
