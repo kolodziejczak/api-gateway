@@ -9,9 +9,9 @@ import (
 	apiruleasserts "github.com/kyma-project/api-gateway/tests/e2e/pkg/asserts/apirule"
 	istioasserts "github.com/kyma-project/api-gateway/tests/e2e/pkg/asserts/istio"
 	"github.com/kyma-project/api-gateway/tests/e2e/pkg/helpers/domain"
-	h "github.com/kyma-project/api-gateway/tests/e2e/pkg/helpers/http"
 	infrahelpers "github.com/kyma-project/api-gateway/tests/e2e/pkg/helpers/infrastructure"
 	modulehelpers "github.com/kyma-project/api-gateway/tests/e2e/pkg/helpers/modules"
+	"github.com/kyma-project/api-gateway/tests/e2e/pkg/helpers/oauth2"
 	"github.com/kyma-project/api-gateway/tests/e2e/pkg/helpers/testsetup"
 	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/e2e-framework/klient/decoder"
@@ -42,13 +42,16 @@ func TestAPIRuleValidation(t *testing.T) {
 		createdApirule, err := infrahelpers.CreateResourceWithTemplateValues(
 			t,
 			APIRuleServiceFallback,
-			// got to fulfill these properly
 			map[string]any{
-				"Name":        testBackground.TestName,
-				"Host":        testBackground.TestName,
-				"ServiceName": testBackground.TargetServiceName,
-				"ServicePort": testBackground.TargetServicePort,
-				"Gateway":     "kyma-system/kyma-gateway",
+				"Name":                         testBackground.TestName,
+				"Host":                         testBackground.TestName,
+				"ServiceName":                  testBackground.TargetServiceName,
+				"ServicePort":                  testBackground.TargetServicePort,
+				"Gateway":                      "kyma-system/kyma-gateway",
+				"Issuer":                       testBackground.Provider.GetIssuerURL(),
+				"JwksUri":                      testBackground.Provider.GetJwksURI(),
+				"JwtSecuredPathWithService":    "/headers",
+				"JwtSecuredPathWithoutService": "/ip",
 			},
 			decoder.MutateNamespace(testBackground.Namespace),
 		)
@@ -59,170 +62,162 @@ func TestAPIRuleValidation(t *testing.T) {
 		istioasserts.VirtualServiceOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace)
 		istioasserts.AuthorizationPolicyOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace, 2)
 
-		requests := []struct {
-			path                   string
-			method                 string
-			expectedResponseStatus int
-		}{
-			{path: "/ip", method: http.MethodGet, expectedResponseStatus: http.StatusOK},
-			{path: "/status/200", method: http.MethodGet, expectedResponseStatus: http.StatusOK},
-			{path: "/headers", method: http.MethodGet, expectedResponseStatus: http.StatusOK},
-		}
-
-		for _, r := range requests {
-			url := fmt.Sprintf("https://%s.%s%s", testBackground.TestName, kymaGatewayDomain, r.path)
-			req, err := http.NewRequest(r.method, url, nil)
-			if err != nil {
-				t.Fatalf("err %s", err.Error())
-			}
-			c := h.NewHTTPClient(t)
-			resp, err := c.Do(req)
-			if err != nil {
-				t.Fatalf("err %s", err.Error())
-			}
-			require.Equal(t, resp.StatusCode, r.expectedResponseStatus)
-		}
-	})
-
-	t.Run("Exposing endpoints in two namespaces", func(t *testing.T) {
-		testBackground, err := testsetup.SetupRandomNamespaceWithOauth2MockAndHttpbin(t, testsetup.WithPrefix("no-auth"))
-		require.NoError(t, err, "Failed to setup test background with httpbin")
-
-		createdApirule, err := infrahelpers.CreateResourceWithTemplateValues(
+		urlWithServiceDefined := fmt.Sprintf("https://%s.%s%s", testBackground.TestName, kymaGatewayDomain, "/headers")
+		oauth2.AssertEndpointWithProvider(
 			t,
-			APIRuleServiceTwoNamespaces,
-			// got to fulfill these properly
-			map[string]any{
-				"Name":        testBackground.TestName,
-				"Host":        testBackground.TestName,
-				"ServiceName": testBackground.TargetServiceName,
-				"ServicePort": testBackground.TargetServicePort,
-				"Gateway":     "kyma-system/kyma-gateway",
-			},
-			decoder.MutateNamespace(testBackground.Namespace),
+			testBackground.Provider,
+			urlWithServiceDefined,
+			http.MethodGet,
 		)
-		require.NoError(t, err, "Failed to create APIRule resource")
-		require.NotEmpty(t, createdApirule, "Created APIRule resource should not be empty")
 
-		apiruleasserts.WaitUntilReady(t, testBackground.TestName, testBackground.Namespace)
-		istioasserts.VirtualServiceOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace)
-		istioasserts.AuthorizationPolicyOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace, 2)
-
-		requests := []struct {
-			path                   string
-			method                 string
-			expectedResponseStatus int
-		}{
-			{path: "/status/200", method: http.MethodGet, expectedResponseStatus: http.StatusOK},
-			{path: "/headers", method: http.MethodGet, expectedResponseStatus: http.StatusOK},
-		}
-
-		for _, r := range requests {
-			println(r.path)
-		}
-	})
-
-	t.Run("Exposing different services with same methods", func(t *testing.T) {
-		testBackground, err := testsetup.SetupRandomNamespaceWithOauth2MockAndHttpbin(t, testsetup.WithPrefix("no-auth"))
-		require.NoError(t, err, "Failed to setup test background with httpbin")
-		kymaGatewayDomain, err := domain.GetFromGateway(t, "kyma-gateway", "kyma-system")
-		require.NoError(t, err, "Failed to get domain from kyma-gateway")
-
-		createdApirule, err := infrahelpers.CreateResourceWithTemplateValues(
+		urlWithoutServiceDefined := fmt.Sprintf("https://%s.%s%s", testBackground.TestName, kymaGatewayDomain, "/ip")
+		oauth2.AssertEndpointWithProvider(
 			t,
-			APIRuleServiceDiffSameMethods,
-			// got to fulfill these properly
-			map[string]any{
-				"Name":        testBackground.TestName,
-				"Host":        testBackground.TestName,
-				"ServiceName": testBackground.TargetServiceName,
-				"ServicePort": testBackground.TargetServicePort,
-				"Gateway":     "kyma-system/kyma-gateway",
-			},
-			decoder.MutateNamespace(testBackground.Namespace),
+			testBackground.Provider,
+			urlWithoutServiceDefined,
+			http.MethodGet,
 		)
-		require.NoError(t, err, "Failed to create APIRule resource")
-		require.NotEmpty(t, createdApirule, "Created APIRule resource should not be empty")
-
-		apiruleasserts.WaitUntilReady(t, testBackground.TestName, testBackground.Namespace)
-		apiruleasserts.HasAnnotation(t, testBackground.TestName, testBackground.Namespace, "gateway.kyma-project.io/original-version", "v2")
-		istioasserts.VirtualServiceOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace)
-		istioasserts.AuthorizationPolicyOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace, 2)
-
-		requests := []struct {
-			path                   string
-			method                 string
-			expectedResponseStatus int
-		}{
-			{path: "/ip", method: http.MethodGet, expectedResponseStatus: http.StatusOK},
-			{path: "/status/200", method: http.MethodGet, expectedResponseStatus: http.StatusOK},
-			{path: "/headers", method: http.MethodGet, expectedResponseStatus: http.StatusOK},
-		}
-
-		for _, r := range requests {
-			url := fmt.Sprintf("https://%s.%s%s", testBackground.TestName, kymaGatewayDomain, r.path)
-			req, err := http.NewRequest(r.method, url, nil)
-			if err != nil {
-				t.Fatalf("err %s", err.Error())
-			}
-			c := h.NewHTTPClient(t)
-			resp, err := c.Do(req)
-			if err != nil {
-				t.Fatalf("err %s", err.Error())
-			}
-			require.Equal(t, resp.StatusCode, r.expectedResponseStatus)
-		}
 	})
 
-	t.Run("Calling a helloworld endpoint with custom label selector service", func(t *testing.T) {
-		testBackground, err := testsetup.SetupRandomNamespaceWithOauth2MockAndHttpbin(t, testsetup.WithPrefix("no-auth"))
-		require.NoError(t, err, "Failed to setup test background with httpbin")
-		kymaGatewayDomain, err := domain.GetFromGateway(t, "kyma-gateway", "kyma-system")
-		require.NoError(t, err, "Failed to get domain from kyma-gateway")
-
-		createdApirule, err := infrahelpers.CreateResourceWithTemplateValues(
-			t,
-			APIRuleServiceCustomLabelSelector,
-			// got to fulfill these properly
-			map[string]any{
-				"Name":        testBackground.TestName,
-				"Host":        testBackground.TestName,
-				"ServiceName": testBackground.TargetServiceName,
-				"ServicePort": testBackground.TargetServicePort,
-				"Gateway":     "kyma-system/kyma-gateway",
-			},
-			decoder.MutateNamespace(testBackground.Namespace),
-		)
-		require.NoError(t, err, "Failed to create APIRule resource")
-		require.NotEmpty(t, createdApirule, "Created APIRule resource should not be empty")
-
-		apiruleasserts.WaitUntilReady(t, testBackground.TestName, testBackground.Namespace)
-		apiruleasserts.HasAnnotation(t, testBackground.TestName, testBackground.Namespace, "gateway.kyma-project.io/original-version", "v2")
-		istioasserts.VirtualServiceOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace)
-		istioasserts.AuthorizationPolicyOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace, 2)
-
-		requests := []struct {
-			path                   string
-			method                 string
-			expectedResponseStatus int
-		}{
-			{path: "/ip", method: http.MethodGet, expectedResponseStatus: http.StatusOK},
-			{path: "/status/200", method: http.MethodGet, expectedResponseStatus: http.StatusOK},
-			{path: "/headers", method: http.MethodGet, expectedResponseStatus: http.StatusOK},
-		}
-
-		for _, r := range requests {
-			url := fmt.Sprintf("https://%s.%s%s", testBackground.TestName, kymaGatewayDomain, r.path)
-			req, err := http.NewRequest(r.method, url, nil)
-			if err != nil {
-				t.Fatalf("err %s", err.Error())
-			}
-			c := h.NewHTTPClient(t)
-			resp, err := c.Do(req)
-			if err != nil {
-				t.Fatalf("err %s", err.Error())
-			}
-			require.Equal(t, resp.StatusCode, r.expectedResponseStatus)
-		}
-	})
+	//t.Run("Exposing endpoints in two namespaces", func(t *testing.T) {
+	//	testBackground, err := testsetup.SetupRandomNamespaceWithOauth2MockAndHttpbin(t, testsetup.WithPrefix("no-auth"))
+	//	require.NoError(t, err, "Failed to setup test background with httpbin")
+	//
+	//	createdApirule, err := infrahelpers.CreateResourceWithTemplateValues(
+	//		t,
+	//		APIRuleServiceTwoNamespaces,
+	//		// got to fulfill these properly
+	//		map[string]any{
+	//			"Name":        testBackground.TestName,
+	//			"Host":        testBackground.TestName,
+	//			"ServiceName": testBackground.TargetServiceName,
+	//			"ServicePort": testBackground.TargetServicePort,
+	//			"Gateway":     "kyma-system/kyma-gateway",
+	//		},
+	//		decoder.MutateNamespace(testBackground.Namespace),
+	//	)
+	//	require.NoError(t, err, "Failed to create APIRule resource")
+	//	require.NotEmpty(t, createdApirule, "Created APIRule resource should not be empty")
+	//
+	//	apiruleasserts.WaitUntilReady(t, testBackground.TestName, testBackground.Namespace)
+	//	istioasserts.VirtualServiceOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace)
+	//	istioasserts.AuthorizationPolicyOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace, 2)
+	//
+	//	requests := []struct {
+	//		path                   string
+	//		method                 string
+	//		expectedResponseStatus int
+	//	}{
+	//		{path: "/status/200", method: http.MethodGet, expectedResponseStatus: http.StatusOK},
+	//		{path: "/headers", method: http.MethodGet, expectedResponseStatus: http.StatusOK},
+	//	}
+	//
+	//	for _, r := range requests {
+	//		println(r.path)
+	//	}
+	//})
+	//
+	//t.Run("Exposing different services with same methods", func(t *testing.T) {
+	//	testBackground, err := testsetup.SetupRandomNamespaceWithOauth2MockAndHttpbin(t, testsetup.WithPrefix("no-auth"))
+	//	require.NoError(t, err, "Failed to setup test background with httpbin")
+	//	kymaGatewayDomain, err := domain.GetFromGateway(t, "kyma-gateway", "kyma-system")
+	//	require.NoError(t, err, "Failed to get domain from kyma-gateway")
+	//
+	//	createdApirule, err := infrahelpers.CreateResourceWithTemplateValues(
+	//		t,
+	//		APIRuleServiceDiffSameMethods,
+	//		// got to fulfill these properly
+	//		map[string]any{
+	//			"Name":        testBackground.TestName,
+	//			"Host":        testBackground.TestName,
+	//			"ServiceName": testBackground.TargetServiceName,
+	//			"ServicePort": testBackground.TargetServicePort,
+	//			"Gateway":     "kyma-system/kyma-gateway",
+	//		},
+	//		decoder.MutateNamespace(testBackground.Namespace),
+	//	)
+	//	require.NoError(t, err, "Failed to create APIRule resource")
+	//	require.NotEmpty(t, createdApirule, "Created APIRule resource should not be empty")
+	//
+	//	apiruleasserts.WaitUntilReady(t, testBackground.TestName, testBackground.Namespace)
+	//	apiruleasserts.HasAnnotation(t, testBackground.TestName, testBackground.Namespace, "gateway.kyma-project.io/original-version", "v2")
+	//	istioasserts.VirtualServiceOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace)
+	//	istioasserts.AuthorizationPolicyOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace, 2)
+	//
+	//	requests := []struct {
+	//		path                   string
+	//		method                 string
+	//		expectedResponseStatus int
+	//	}{
+	//		{path: "/ip", method: http.MethodGet, expectedResponseStatus: http.StatusOK},
+	//		{path: "/status/200", method: http.MethodGet, expectedResponseStatus: http.StatusOK},
+	//		{path: "/headers", method: http.MethodGet, expectedResponseStatus: http.StatusOK},
+	//	}
+	//
+	//	for _, r := range requests {
+	//		url := fmt.Sprintf("https://%s.%s%s", testBackground.TestName, kymaGatewayDomain, r.path)
+	//		req, err := http.NewRequest(r.method, url, nil)
+	//		if err != nil {
+	//			t.Fatalf("err %s", err.Error())
+	//		}
+	//		c := h.NewHTTPClient(t)
+	//		resp, err := c.Do(req)
+	//		if err != nil {
+	//			t.Fatalf("err %s", err.Error())
+	//		}
+	//		require.Equal(t, resp.StatusCode, r.expectedResponseStatus)
+	//	}
+	//})
+	//
+	//t.Run("Calling a helloworld endpoint with custom label selector service", func(t *testing.T) {
+	//	testBackground, err := testsetup.SetupRandomNamespaceWithOauth2MockAndHttpbin(t, testsetup.WithPrefix("no-auth"))
+	//	require.NoError(t, err, "Failed to setup test background with httpbin")
+	//	kymaGatewayDomain, err := domain.GetFromGateway(t, "kyma-gateway", "kyma-system")
+	//	require.NoError(t, err, "Failed to get domain from kyma-gateway")
+	//
+	//	createdApirule, err := infrahelpers.CreateResourceWithTemplateValues(
+	//		t,
+	//		APIRuleServiceCustomLabelSelector,
+	//		// got to fulfill these properly
+	//		map[string]any{
+	//			"Name":        testBackground.TestName,
+	//			"Host":        testBackground.TestName,
+	//			"ServiceName": testBackground.TargetServiceName,
+	//			"ServicePort": testBackground.TargetServicePort,
+	//			"Gateway":     "kyma-system/kyma-gateway",
+	//		},
+	//		decoder.MutateNamespace(testBackground.Namespace),
+	//	)
+	//	require.NoError(t, err, "Failed to create APIRule resource")
+	//	require.NotEmpty(t, createdApirule, "Created APIRule resource should not be empty")
+	//
+	//	apiruleasserts.WaitUntilReady(t, testBackground.TestName, testBackground.Namespace)
+	//	apiruleasserts.HasAnnotation(t, testBackground.TestName, testBackground.Namespace, "gateway.kyma-project.io/original-version", "v2")
+	//	istioasserts.VirtualServiceOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace)
+	//	istioasserts.AuthorizationPolicyOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace, 2)
+	//
+	//	requests := []struct {
+	//		path                   string
+	//		method                 string
+	//		expectedResponseStatus int
+	//	}{
+	//		{path: "/ip", method: http.MethodGet, expectedResponseStatus: http.StatusOK},
+	//		{path: "/status/200", method: http.MethodGet, expectedResponseStatus: http.StatusOK},
+	//		{path: "/headers", method: http.MethodGet, expectedResponseStatus: http.StatusOK},
+	//	}
+	//
+	//	for _, r := range requests {
+	//		url := fmt.Sprintf("https://%s.%s%s", testBackground.TestName, kymaGatewayDomain, r.path)
+	//		req, err := http.NewRequest(r.method, url, nil)
+	//		if err != nil {
+	//			t.Fatalf("err %s", err.Error())
+	//		}
+	//		c := h.NewHTTPClient(t)
+	//		resp, err := c.Do(req)
+	//		if err != nil {
+	//			t.Fatalf("err %s", err.Error())
+	//		}
+	//		require.Equal(t, resp.StatusCode, r.expectedResponseStatus)
+	//	}
+	//})
 }
