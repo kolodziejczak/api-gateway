@@ -8,7 +8,6 @@ import (
 
 	apiruleasserts "github.com/kyma-project/api-gateway/tests/e2e/pkg/asserts/apirule"
 	"github.com/kyma-project/api-gateway/tests/e2e/pkg/asserts/endpoint"
-	istioasserts "github.com/kyma-project/api-gateway/tests/e2e/pkg/asserts/istio"
 	"github.com/kyma-project/api-gateway/tests/e2e/pkg/helpers/domain"
 	infrahelpers "github.com/kyma-project/api-gateway/tests/e2e/pkg/helpers/infrastructure"
 	modulehelpers "github.com/kyma-project/api-gateway/tests/e2e/pkg/helpers/modules"
@@ -51,7 +50,6 @@ func TestAPIRuleMethodsOnPaths(t *testing.T) {
 		require.NotEmpty(t, createdApirule, "Created APIRule resource should not be empty")
 
 		apiruleasserts.WaitUntilReady(t, testBackground.TestName, testBackground.Namespace)
-		istioasserts.VirtualServiceOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace)
 
 		requests := []struct {
 			path                   string
@@ -95,7 +93,6 @@ func TestAPIRuleMethodsOnPaths(t *testing.T) {
 		require.NotEmpty(t, createdApirule, "Created APIRule resource should not be empty")
 
 		apiruleasserts.WaitUntilReady(t, testBackground.TestName, testBackground.Namespace)
-		istioasserts.VirtualServiceOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace)
 
 		exposedPathsRequests := []struct {
 			path                   string

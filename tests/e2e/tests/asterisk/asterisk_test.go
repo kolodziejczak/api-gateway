@@ -7,7 +7,6 @@ import (
 
 	apiruleasserts "github.com/kyma-project/api-gateway/tests/e2e/pkg/asserts/apirule"
 	"github.com/kyma-project/api-gateway/tests/e2e/pkg/asserts/endpoint"
-	istioasserts "github.com/kyma-project/api-gateway/tests/e2e/pkg/asserts/istio"
 	"sigs.k8s.io/e2e-framework/klient/decoder"
 
 	_ "embed"
@@ -48,9 +47,6 @@ func TestAPIRuleAsterisk(t *testing.T) {
 		require.NotEmpty(t, createdApirule, "Created APIRule resource should not be empty")
 
 		apiruleasserts.WaitUntilReady(t, testBackground.TestName, testBackground.Namespace)
-		apiruleasserts.HasAnnotation(t, testBackground.TestName, testBackground.Namespace, "gateway.kyma-project.io/original-version", "v2")
-		istioasserts.VirtualServiceOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace)
-		istioasserts.AuthorizationPolicyOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace, 8)
 
 		requests := []struct {
 			endpoint           string

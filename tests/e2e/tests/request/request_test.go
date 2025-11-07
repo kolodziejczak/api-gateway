@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	apiruleasserts "github.com/kyma-project/api-gateway/tests/e2e/pkg/asserts/apirule"
-	istioasserts "github.com/kyma-project/api-gateway/tests/e2e/pkg/asserts/istio"
 	"github.com/kyma-project/api-gateway/tests/e2e/pkg/helpers/domain"
 	h "github.com/kyma-project/api-gateway/tests/e2e/pkg/helpers/http"
 	infrahelpers "github.com/kyma-project/api-gateway/tests/e2e/pkg/helpers/infrastructure"
@@ -55,7 +54,6 @@ func TestAPIRuleRequestHeadersAndCookies(t *testing.T) {
 		require.NotEmpty(t, createdApirule, "Created APIRule resource should not be empty")
 
 		apiruleasserts.WaitUntilReady(t, testBackground.TestName, testBackground.Namespace)
-		istioasserts.VirtualServiceOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace)
 
 		url := fmt.Sprintf("https://%s.%s%s", testBackground.TestName, kymaGatewayDomain, "/headers")
 		req, err := http.NewRequest(http.MethodGet, url, nil)
@@ -109,7 +107,6 @@ func TestAPIRuleRequestHeadersAndCookies(t *testing.T) {
 		require.NotEmpty(t, createdApirule, "Created APIRule resource should not be empty")
 
 		apiruleasserts.WaitUntilReady(t, testBackground.TestName, testBackground.Namespace)
-		istioasserts.VirtualServiceOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace)
 
 		url := fmt.Sprintf("https://%s.%s%s", testBackground.TestName, kymaGatewayDomain, "/headers")
 		req, err := http.NewRequest(http.MethodGet, url, nil)

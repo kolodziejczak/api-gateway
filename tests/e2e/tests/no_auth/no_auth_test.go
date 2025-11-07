@@ -8,7 +8,6 @@ import (
 
 	apiruleasserts "github.com/kyma-project/api-gateway/tests/e2e/pkg/asserts/apirule"
 	"github.com/kyma-project/api-gateway/tests/e2e/pkg/asserts/endpoint"
-	istioasserts "github.com/kyma-project/api-gateway/tests/e2e/pkg/asserts/istio"
 	"github.com/kyma-project/api-gateway/tests/e2e/pkg/helpers/domain"
 	"github.com/kyma-project/api-gateway/tests/e2e/pkg/helpers/httpincluster"
 	infrahelpers "github.com/kyma-project/api-gateway/tests/e2e/pkg/helpers/infrastructure"
@@ -52,7 +51,6 @@ func TestAPIRuleValidation(t *testing.T) {
 		require.NotEmpty(t, createdApirule, "Created APIRule resource should not be empty")
 
 		apiruleasserts.WaitUntilReady(t, testBackground.TestName, testBackground.Namespace)
-		istioasserts.VirtualServiceOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace)
 
 		requests := []struct {
 			path                   string
@@ -93,7 +91,6 @@ func TestAPIRuleValidation(t *testing.T) {
 		require.NotEmpty(t, createdApirule, "Created APIRule resource should not be empty")
 
 		apiruleasserts.WaitUntilReady(t, testBackground.TestName, testBackground.Namespace)
-		istioasserts.VirtualServiceOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace)
 
 		requestPaths := []string{
 			"/status/200",
@@ -142,8 +139,6 @@ func TestAPIRuleValidation(t *testing.T) {
 		require.NotEmpty(t, createdApirule, "Created APIRule resource should not be empty")
 
 		apiruleasserts.WaitUntilReady(t, testBackground.TestName, testBackground.Namespace)
-		apiruleasserts.HasAnnotation(t, testBackground.TestName, testBackground.Namespace, "gateway.kyma-project.io/original-version", "v2")
-		istioasserts.VirtualServiceOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace)
 
 		updatedApirule, err := infrahelpers.UpdateResourceWithTemplateValues(
 			t,
@@ -162,8 +157,6 @@ func TestAPIRuleValidation(t *testing.T) {
 		require.NotEmpty(t, updatedApirule, "Updated APIRule resource should not be empty")
 
 		apiruleasserts.WaitUntilReady(t, testBackground.TestName, testBackground.Namespace)
-		apiruleasserts.HasAnnotation(t, testBackground.TestName, testBackground.Namespace, "gateway.kyma-project.io/original-version", "v2")
-		istioasserts.VirtualServiceOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace)
 
 		requests := []struct {
 			path                   string

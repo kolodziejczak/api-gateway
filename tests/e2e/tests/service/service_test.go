@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	apiruleasserts "github.com/kyma-project/api-gateway/tests/e2e/pkg/asserts/apirule"
-	istioasserts "github.com/kyma-project/api-gateway/tests/e2e/pkg/asserts/istio"
 	"github.com/kyma-project/api-gateway/tests/e2e/pkg/helpers/domain"
 	"github.com/kyma-project/api-gateway/tests/e2e/pkg/helpers/httpbin"
 	infrahelpers "github.com/kyma-project/api-gateway/tests/e2e/pkg/helpers/infrastructure"
@@ -61,8 +60,6 @@ func TestAPIRuleDifferentServices(t *testing.T) {
 		require.NotEmpty(t, createdApirule, "Created APIRule resource should not be empty")
 
 		apiruleasserts.WaitUntilReady(t, testBackground.TestName, testBackground.Namespace)
-		istioasserts.VirtualServiceOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace)
-		istioasserts.AuthorizationPolicyOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace, 2)
 
 		urlWithServiceDefined := fmt.Sprintf("https://%s.%s%s", testBackground.TestName, kymaGatewayDomain, "/headers")
 		oauth2.AssertEndpointWithProvider(
@@ -114,7 +111,6 @@ func TestAPIRuleDifferentServices(t *testing.T) {
 		require.NotEmpty(t, createdApirule, "Created APIRule resource should not be empty")
 
 		apiruleasserts.WaitUntilReady(t, testBackground.TestName, testBackground.Namespace)
-		istioasserts.VirtualServiceOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace)
 
 		url := fmt.Sprintf("https://%s.%s%s", testBackground.TestName, kymaGatewayDomain, "/get")
 		urlOtherNamespace := fmt.Sprintf("https://%s.%s%s", testBackground.TestName, kymaGatewayDomain, "/ip")

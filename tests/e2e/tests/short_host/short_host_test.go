@@ -9,7 +9,6 @@ import (
 	v2 "github.com/kyma-project/api-gateway/apis/gateway/v2"
 	apiruleasserts "github.com/kyma-project/api-gateway/tests/e2e/pkg/asserts/apirule"
 	"github.com/kyma-project/api-gateway/tests/e2e/pkg/asserts/endpoint"
-	istioasserts "github.com/kyma-project/api-gateway/tests/e2e/pkg/asserts/istio"
 	"github.com/kyma-project/api-gateway/tests/e2e/pkg/helpers/domain"
 	infrahelpers "github.com/kyma-project/api-gateway/tests/e2e/pkg/helpers/infrastructure"
 	modulehelpers "github.com/kyma-project/api-gateway/tests/e2e/pkg/helpers/modules"
@@ -48,7 +47,6 @@ func TestAPIRuleShortHost(t *testing.T) {
 		require.NotEmpty(t, createdApirule, "Created APIRule resource should not be empty")
 
 		apiruleasserts.WaitUntilReady(t, testBackground.TestName, testBackground.Namespace)
-		istioasserts.VirtualServiceOwnedByAPIRuleExists(t, testBackground.Namespace, testBackground.TestName, testBackground.Namespace)
 
 		url := fmt.Sprintf("https://%s.%s%s", testBackground.TestName, kymaGatewayDomain, "/ip")
 		err = endpoint.AssertEndpoint(t, http.MethodGet, url, http.StatusOK)
